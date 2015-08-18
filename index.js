@@ -16,7 +16,7 @@ module.exports = function sanitizer_plugin(md, options) {
 
 
   var allowedTags = [ 'a', 'b', 'blockquote', 'code', 'em', 'h1', 'h2', 'h3', 'h4', 'h5',
-                     'h6', 'li', 'ol', 'p', 'pre', 's', 'sub', 'sup', 'strong', 'ul' ];
+                     'h6', 'li', 'ol', 'p', 'pre', 's', 'sub', 'sup', 'strong', 'ul', 'iframe' ];
   var openTagCount = new Array(allowedTags.length);
   var removeTag = new Array(allowedTags.length);
   for (j = 0; j < allowedTags.length; j++) { openTagCount[j] = 0; }
@@ -41,6 +41,8 @@ module.exports = function sanitizer_plugin(md, options) {
     // <img src="url" alt=""(optional) title=""(optional)>
     var patternImage = '<img\\ssrc="([^"<>]*)"(?:\\salt="([^"<>]*)")?(?:\\stitle="([^"<>]*)")?\\s?\\/?>';
     var regexpImage = RegExp(patternImage, 'i');
+    var patternIframe = '<iframe\\s+([^>]*)src="([^"<>]*)"([^>]*)>';
+    var regexpIframe = RegExp(patternIframe, 'i');
 
     /*
      * it starts with '<' and maybe ends with '>',
@@ -68,6 +70,29 @@ module.exports = function sanitizer_plugin(md, options) {
           }
           return '<img src="' + url + '" alt="' + alt + '" title="' + title + '">';
         }
+      }
+
+      // iframes
+      tagnameIndex = allowedTags.indexOf('iframe');
+      match = tag.match(regexpIframe);
+      if (match) {
+        runBalancer = true;
+        openTagCount[tagnameIndex] += 1;
+
+        var beforeUrl = (typeof match[1] !== 'undefined') ? match[1].trim() : '';
+        var afterUrl = (typeof match[3] !== 'undefined') ? match[3].trim() : '';
+        url = getUrl(match[2]);
+
+        return '<iframe sandbox="allow-same-origin allow-scripts" src="' + url + '"' + beforeUrl + ' ' + afterUrl + '>';
+      }
+      match = /<\/iframe>/i.test(tag);
+      if (match) {
+        runBalancer = true;
+        openTagCount[tagnameIndex] -= 1;
+        if (openTagCount[tagnameIndex] < 0) {
+          removeTag[tagnameIndex] = true;
+        }
+        return '</iframe>';
       }
 
       // links
@@ -100,7 +125,8 @@ module.exports = function sanitizer_plugin(md, options) {
       }
 
       // whitelisted tags
-      match = tag.match(/<(\/?)(b|blockquote|code|em|h[1-6]|li|ol(?: start="\d+")?|p|pre|s|sub|sup|strong|ul)>/i);
+      match =
+        tag.match(/<(\/?)(b|blockquote|code|em|h[1-6]|li|ol(?: start="\d+")?|p|pre|s|sub|sup|strong|ul|iframe)>/i);
       if (match && !/<\/ol start="\d+"/i.test(tag)) {
         runBalancer = true;
         tagnameIndex = allowedTags.indexOf(match[2].toLowerCase().split(' ')[0]);
